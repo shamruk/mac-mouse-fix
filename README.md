@@ -1,6 +1,11 @@
 
 <!-- <img src="https://i.imgur.com/ev55sJ3.png"> -->
 
+- This branch used to be called `2.0.0`
+- Most relevant changes from this branch have been moved to the `feature-remap` branch
+- There are still some changes to scrolling in this which aren't reflected anywhere else.
+    - Something went wrong when creating the `feature-remap` branch, which probably sees us having to manually copy paste the scroll-related changes from this branch if we want to use them somewhere else
+
 # Mac Mouse Fix
 
 A simple way to make your mouse better.
