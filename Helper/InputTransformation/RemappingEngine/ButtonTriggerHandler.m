@@ -18,23 +18,32 @@
 #import "ButtonLandscapeAssessor.h"
 #import "Utility_Transformation.h"
 
+/// Figures out what effects to execute based on the triggers coming in from ButtonTriggerGenerator.m
+
 @implementation ButtonTriggerHandler
 
 #pragma mark - Handle triggers
 
 + (MFEventPassThroughEvaluation)handleButtonTriggerWithButton:(NSNumber *)button triggerType:(MFActionTriggerType)triggerType clickLevel:(NSNumber *)level device:(NSNumber *)devID {
+    ///
     
     DDLogDebug(@"HANDLING BUTTON TRIGGER - button: %@, triggerType: %@, level: %@, devID: %@", button, @(triggerType), level, devID);
     
-    // Get remaps and apply modifier overrides
+    /// Get remaps & apply overrides
+    
     NSDictionary *remaps = TransformationManager.remaps;
     NSDictionary *modifiersActingOnThisButton = [ModifierManager getActiveModifiersForDevice:devID filterButton:button event:nil]; // The modifiers which act on the incoming button (the button can't modify itself so we filter it out)
     NSDictionary *effectiveRemaps = Utility_Transformation.effectiveRemapsMethod_Override(remaps, modifiersActingOnThisButton);
     NSDictionary *remapsForModifiersActingOnThisButton = remaps[modifiersActingOnThisButton];
     
+    /// Debug
+    
 //    DDLogDebug(@"\nActive mods: %@, \nremapsForActiveMods: %@", modifiersActingOnThisButton, remapsForModifiersActingOnThisButton);
     
-    // If no remaps exist for this button, let the CGEvent which caused this function call pass through (Only if this function was invoked as a direct result of a physical button press)
+    /// Let input pass through
+    /// If no remaps exist for this button, let the CGEvent which caused this function call pass through
+    ///     - Of course, that is only, if this function was invoked as a direct result of a physical button press - so if triggerType is buttonUp or buttonDown)
+    
     if (triggerType == kMFActionTriggerTypeButtonDown || triggerType == kMFActionTriggerTypeButtonUp) {
         if (![ButtonLandscapeAssessor effectExistsForButton:button
                                                      remaps:remaps
@@ -44,34 +53,42 @@
         }
     }
     
-    // Asses mapping landscape
-    // \note It's unnecessary to assess mapping landscape (that includes calculating targetTrigger) on click actions again for every call of this function. It only has to be calculated once for every "click" (as opposed to "hold") actionArray in every possible overriden remapDict including the unoverriden one. We could precalculate everything once when loading remapDict if we wanted to. This is plenty fast though so it's fine.
-    
-    NSDictionary *activeModifiers = [ModifierManager getActiveModifiersForDevice:devID filterButton:nil event:nil];
-    //      ^ We need to check whether the incoming button is acting as a modifier to determine
-    //          `effectForMouseDownStateOfThisLevelExists`, so we can't use the variable `activeModifiers` defined above because it filters out the incoming button
-    //      Noah from future: TODO: But why do we pass the old value for `effectiveRemaps` - which is not based on `activeModifiersUnfiltered` - to ButtonLandscapeAssessor?
-    
-    BOOL clickActionOfThisLevelExists;
-    BOOL effectForMouseDownStateOfThisLevelExists;
-    BOOL effectOfGreaterLevelExists;
-    [ButtonLandscapeAssessor assessMappingLandscapeWithButton:button
-                                                        level:level
-                                              activeModifiers:activeModifiers
-                                      activeModifiersFiltered:modifiersActingOnThisButton
-                                        effectiveRemapsMethod:Utility_Transformation.effectiveRemapsMethod_Override
-                                                       remaps:remaps
-                                                thisClickDoBe:&clickActionOfThisLevelExists
-                                                 thisDownDoBe:&effectForMouseDownStateOfThisLevelExists
-                                                  greaterDoBe:&effectOfGreaterLevelExists];
-    
-    // DDLogDebug(@"ACTIVE MODIFIERS - %@", activeModifiersUnfiltered);
-    
-    // Send trigger (if apropriate)
+    /// Execute effect
     
     if (isTriggerForClickAction(triggerType)) {
+        /// The incoming trigger is for a click action.
+     
+        /// Get active modifiers
+        ///     We need them to assess mapping landscape (below)
         
-        // Find targetTriggerType based on mapping landscape assessment
+        NSDictionary *activeModifiers = [ModifierManager getActiveModifiersForDevice:devID filterButton:nil event:nil];
+        ///      ^ We need to check whether the incoming button is acting as a modifier to determine `effectForMouseDownStateOfThisLevelExists`,
+        ///         so we can't use the variable `modifiersActingOnThisButton` defined above because it filters out the incoming button
+        
+        /**
+        Assess the mapping landscape
+            - Analyze which other mappings exist for the incoming button. Based on this info we can then determine which of the 3 click triggers we want to execute the click action on. We call this trigger the `targetTriggerType`.
+                - The "3 click triggers" (mentioned above) are the triggers produced by ButtonTriggerGenerator on which a click action can be executed. Namely buttonUp, buttonDown, and levelTimerExpired.
+            - It's unnecessary to figure out the targetTriggerType for click actions again and again, on every call of this function. We could precalculated everything, because the targetTriggerType only depends on the other mappings on the incoming button (aka the mappingLandscape).
+                - However, when modifiers are active, (parts) of the mappingLandscape can be overridden. This would somewhat complicate the pre-calculation-approach, as we'd have to precalculate for each possible combination of modifications.
+                - Anyways, the current approach (where we calculate the targetTriggerTypes for click actions again and again) is is plenty fast. So it's fine.
+         */
+        
+        BOOL clickActionOfThisLevelExists;
+        BOOL effectForMouseDownStateOfThisLevelExists;
+        BOOL effectOfGreaterLevelExists;
+        [ButtonLandscapeAssessor assessMappingLandscapeWithButton:button
+                                                            level:level
+                                                  activeModifiers:activeModifiers
+                                          activeModifiersFiltered:modifiersActingOnThisButton
+                                            effectiveRemapsMethod:Utility_Transformation.effectiveRemapsMethod_Override
+                                                           remaps:remaps
+                                                    thisClickDoBe:&clickActionOfThisLevelExists
+                                                     thisDownDoBe:&effectForMouseDownStateOfThisLevelExists
+                                                      greaterDoBe:&effectOfGreaterLevelExists];
+        
+        /// Find targetTriggerType based on mappingLandscape
+        
         MFActionTriggerType targetTriggerType = kMFActionTriggerTypeNone;
         if (effectOfGreaterLevelExists) {
             targetTriggerType = kMFActionTriggerTypeLevelTimerExpired;
@@ -82,6 +99,7 @@
         }
         
         // Execute action if incoming trigger matches target trigger
+        
         if (triggerType == targetTriggerType) executeClickOrHoldActionIfItExists(kMFButtonTriggerDurationClick,
                                                                                  devID,
                                                                                  button,
@@ -90,8 +108,8 @@
                                                                                  remapsForModifiersActingOnThisButton,
                                                                                  effectiveRemaps);
     } else if (triggerType == kMFActionTriggerTypeHoldTimerExpired) {
-        
-        // If trigger is for hold action, execute hold action
+        /// Incoming trigger is for hold action
+        /// -> Execute the hold action immediately. No need to calculate targetTriggerType like with the click triggers (above)
         
         executeClickOrHoldActionIfItExists(kMFButtonTriggerDurationHold,
                                            devID,
@@ -100,6 +118,8 @@
                                            modifiersActingOnThisButton,
                                            remapsForModifiersActingOnThisButton,
                                            effectiveRemaps);
+    } else {
+        assert(false);
     }
     
     
