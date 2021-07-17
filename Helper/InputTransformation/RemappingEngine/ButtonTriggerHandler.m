@@ -32,9 +32,12 @@
     /// Get remaps & apply overrides
     
     NSDictionary *remaps = TransformationManager.remaps;
-    NSDictionary *modifiersActingOnThisButton = [ModifierManager getActiveModifiersForDevice:devID filterButton:button event:nil]; // The modifiers which act on the incoming button (the button can't modify itself so we filter it out)
-    NSDictionary *effectiveRemaps = Utility_Transformation.effectiveRemapsMethod_Override(remaps, modifiersActingOnThisButton);
-    NSDictionary *remapsForModifiersActingOnThisButton = remaps[modifiersActingOnThisButton];
+    NSDictionary *modifiersActingOnThisTrigger = [ModifierManager getActiveModifiersForDevice:devID filterButton:button event:nil]; // The modifiers which act on the incoming button (the button can't modify itself so we filter it out)
+    NSDictionary *remapsActingOnThisTrigger = Utility_Transformation.effectiveRemapsMethod_Override(remaps, modifiersActingOnThisTrigger); /// Take the defaults remaps and override them with the remapsForModifiersActingOnThisTrigger
+    NSDictionary *remapsForModifiersActingOnThisTrigger = remaps[modifiersActingOnThisTrigger];
+    ///     ^ `remapsForModifiersActingOnThisTrigger` is different from `remapsActingOnThisTrigger`, because it doesn't have any overrides applied to it.
+    ///         For example if there is no modification for modifiersActingOnThisTrigger, then remapsForModifiersActingOnThisTrigger will be empty, while remapsActingOnThisTrigger will contain the default remaps.
+    ///         (I'm using the words "modifications" and "remaps" interchangeably)
     
     /// Debug
     
@@ -47,13 +50,19 @@
     if (triggerType == kMFActionTriggerTypeButtonDown || triggerType == kMFActionTriggerTypeButtonUp) {
         if (![ButtonLandscapeAssessor effectExistsForButton:button
                                                      remaps:remaps
-                                            effectiveRemaps:effectiveRemaps]) {
+                                            effectiveRemaps:remapsActingOnThisTrigger]) {
             DDLogDebug(@"No remaps exist for this button, letting event pass through");
             return kMFEventPassThroughApproval;
         }
     }
     
-    /// Execute effect
+    /// Execute modifyingActions
+    
+    if (triggerType == kMFActionTriggerTypeButtonDown) {
+        
+    }
+    
+    /// Execute oneShotActions
     
     if (isTriggerForClickAction(triggerType)) {
         /// The incoming trigger is for a click action.
@@ -80,7 +89,7 @@
         [ButtonLandscapeAssessor assessMappingLandscapeWithButton:button
                                                             level:level
                                                   activeModifiers:activeModifiers
-                                          activeModifiersFiltered:modifiersActingOnThisButton
+                                          activeModifiersFiltered:modifiersActingOnThisTrigger
                                             effectiveRemapsMethod:Utility_Transformation.effectiveRemapsMethod_Override
                                                            remaps:remaps
                                                     thisClickDoBe:&clickActionOfThisLevelExists
@@ -98,15 +107,15 @@
             targetTriggerType = kMFActionTriggerTypeButtonDown;
         }
         
-        // Execute action if incoming trigger matches target trigger
+        /// Execute action if incoming trigger matches target trigger
         
         if (triggerType == targetTriggerType) executeClickOrHoldActionIfItExists(kMFButtonTriggerDurationClick,
                                                                                  devID,
                                                                                  button,
                                                                                  level,
-                                                                                 modifiersActingOnThisButton,
-                                                                                 remapsForModifiersActingOnThisButton,
-                                                                                 effectiveRemaps);
+                                                                                 modifiersActingOnThisTrigger,
+                                                                                 remapsForModifiersActingOnThisTrigger,
+                                                                                 remapsActingOnThisTrigger);
     } else if (triggerType == kMFActionTriggerTypeHoldTimerExpired) {
         /// Incoming trigger is for hold action
         /// -> Execute the hold action immediately. No need to calculate targetTriggerType like with the click triggers (above)
@@ -115,9 +124,9 @@
                                            devID,
                                            button,
                                            level,
-                                           modifiersActingOnThisButton,
-                                           remapsForModifiersActingOnThisButton,
-                                           effectiveRemaps);
+                                           modifiersActingOnThisTrigger,
+                                           remapsForModifiersActingOnThisTrigger,
+                                           remapsActingOnThisTrigger);
     } else {
         assert(false);
     }
@@ -127,17 +136,17 @@
     
 }
 
-#pragma mark - Execute actions
+#pragma mark - Execute oneShotActions
 
 static void executeClickOrHoldActionIfItExists(NSString * _Nonnull duration,
                                                NSNumber * _Nonnull devID,
                                                NSNumber * _Nonnull button,
                                                NSNumber * _Nonnull level,
                                                NSDictionary *activeModifiers,
-                                               NSDictionary *remapsForActiveModifiers,
-                                               NSDictionary *effectiveRemaps) {
+                                               NSDictionary *remapsForModifiersActingOnThisTrigger,
+                                               NSDictionary *remapsActingOnThisTrigger) {
     
-    NSArray *effectiveActionArray = effectiveRemaps[button][level][duration];
+    NSArray *effectiveActionArray = remapsActingOnThisTrigger[button][level][duration];
     if (effectiveActionArray) { // click/hold action does exist for this button + level
         // // Add modificationPrecondition info for addMode. See TransformationManager -> AddMode for context
         if ([effectiveActionArray[0][kMFActionDictKeyType] isEqualToString: kMFActionDictTypeAddModeFeedback]) {
@@ -148,7 +157,36 @@ static void executeClickOrHoldActionIfItExists(NSString * _Nonnull duration,
         // Notify triggering button
         [ButtonTriggerGenerator handleButtonHasHadDirectEffectWithDevice:devID button:button];
         // Notify modifying buttons if executed action depends on active modification
-        NSArray *actionArrayFromActiveModification = remapsForActiveModifiers[button][level][duration];
+        NSArray *actionArrayFromActiveModification = remapsForModifiersActingOnThisTrigger[button][level][duration];
+        BOOL actionStemsFromModification = [effectiveActionArray isEqual:actionArrayFromActiveModification];
+        if (actionStemsFromModification) {
+            [ModifierManager handleModifiersHaveHadEffect:devID];
+        }
+    }
+}
+
+#pragma mark - Execute modifyingActions
+
+static void executeModifyingActionIfItExists(NSString * _Nonnull duration,
+                                               NSNumber * _Nonnull devID,
+                                               NSNumber * _Nonnull button,
+                                               NSNumber * _Nonnull level,
+                                               NSDictionary *activeModifiers,
+                                               NSDictionary *remapsForModifiersActingOnThisTrigger,
+                                               NSDictionary *remapsActingOnThisTrigger) {
+    
+    NSArray *effectiveActionArray = remapsActingOnThisTrigger[button][level][kMFButtonTriggerDurationModifying];
+    if (effectiveActionArray) { // click/hold action does exist for this button + level
+        // // Add modificationPrecondition info for addMode. See TransformationManager -> AddMode for context
+        if ([effectiveActionArray[0][kMFActionDictKeyType] isEqualToString: kMFActionDictTypeAddModeFeedback]) {
+            effectiveActionArray[0][kMFRemapsKeyModificationPrecondition] = activeModifiers;
+        }
+        // Execute action
+        [Actions executeActionArray:effectiveActionArray];
+        // Notify triggering button
+        [ButtonTriggerGenerator handleButtonHasHadDirectEffectWithDevice:devID button:button];
+        // Notify modifying buttons if executed action depends on active modification
+        NSArray *actionArrayFromActiveModification = remapsForModifiersActingOnThisTrigger[button][level][kMFButtonTriggerDurationModifying];
         BOOL actionStemsFromModification = [effectiveActionArray isEqual:actionArrayFromActiveModification];
         if (actionStemsFromModification) {
             [ModifierManager handleModifiersHaveHadEffect:devID];

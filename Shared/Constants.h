@@ -99,12 +99,15 @@ typedef NSString*                                                       MFString
 #define kMFConfigKeyAppOverrides @"AppOverrides"
 
 #pragma mark - Remaps array
-// (^ Reuses many keys defined under "Remaps dict")
+/// ^ Reuses many keys defined under "Remaps dict"
+/// -> remapsArray is used to display the remapsTable in the mainApp
+
 #define kMFRemapsKeyTrigger                     @"trigger"
 #define kMFRemapsKeyModificationPrecondition    @"modifiers"
 #define kMFRemapsKeyEffect                      @"effect"
 
 #pragma mark - Remaps dict
+/// -> remapsDict is used in the helperApp to actually remap inputs
 
 // Modification preconditions
 // Buttons
@@ -117,25 +120,27 @@ typedef NSString*                                                       MFString
 
 // Modified drag
 
-// Trigger (value for key kMFRemapsKeyTrigger)
-#define kMFTriggerDrag                                                  @"dragTrigger"
-// Type key
+/// Trigger (value for key kMFRemapsKeyTrigger)
+//#define kMFTriggerDrag                                                  @"dragTrigger"
+///     ^ Use kMFActionDictTypeModifiedDrag instead
+/// Type key
 #define kMFModifiedDragDictKeyType                                      @"modifiedDragType"
-// Type values
+/// Type values
 #define kMFModifiedDragTypeTwoFingerSwipe                               @"twoFingerSwipe"
 #define kMFModifiedDragTypeThreeFingerSwipe                             @"threeFingerSwipe"
 #define kMFModifiedDragTypeFakeDrag                                     @"fakeDrag"
 #define kMFModifiedDragTypeAddModeFeedback                              @"addModeDrag"
-// Variant keys
+/// Variant keys
 #define kMFModifiedDragDictKeyFakeDragVariantButtonNumber               @"buttonNumber"
 
 // Modified Scroll
 
-// Trigger (value for key kMFRemapsKeyTrigger)
-#define kMFTriggerScroll                                                @"scrollTrigger"
-// Type key
+/// Trigger (value for key kMFRemapsKeyTrigger)
+//#define kMFTriggerScroll                                                @"scrollTrigger"
+/// ^ Use kMFActionDictTypeModifiedScroll instead
+/// Type key
 #define kMFModifiedScrollDictKeyType                                    @"modifiedScrollType"
-// Type values
+/// Type values
 #define kMFModifiedScrollTypeZoom                                       @"zoom"
 #define kMFModifiedScrollTypeHorizontalScroll                           @"horizontal"
 #define kMFModifiedScrollTypePrecisionScroll                            @"precision"
@@ -152,6 +157,9 @@ typedef NSString*                                                       MFString
 // Trigger Values
 #define kMFButtonTriggerDurationClick                                   @"click"
 #define kMFButtonTriggerDurationHold                                    @"hold"
+#define kMFButtonTriggerDurationModifying                               @"modifying"
+///     ^ Using "duration" doesn't make sense anymore after introducing durationModifying.
+///         TODO: Use "type" instead of "duration". (Also replace kMFButtonTriggerKeyDuration)
 // Type key
 #define kMFActionDictKeyType                                            @"type"
 // Type values
@@ -160,6 +168,8 @@ typedef NSString*                                                       MFString
 #define kMFActionDictTypeSmartZoom                                      @"smartZoom"
 #define kMFActionDictTypeKeyboardShortcut                               @"keyboardShortcut"
 #define kMFActionDictTypeMouseButtonClicks                              @"mouseButton"
+#define kMFActionDictTypeModifiedDrag                                   @"modifiedDrag"
+#define kMFActionDictTypeModifiedScroll                                 @"modifiedScroll"
 #define kMFActionDictTypeAddModeFeedback                                @"addModeAction"
 
 // Variant keys
