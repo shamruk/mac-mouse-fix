@@ -157,7 +157,8 @@ typedef NSString*                                                       MFString
 // Trigger Values
 #define kMFButtonTriggerDurationClick                                   @"click"
 #define kMFButtonTriggerDurationHold                                    @"hold"
-#define kMFButtonTriggerDurationModifying                               @"modifying"
+#define kMFButtonTriggerDurationModifiedDrag                            @"modifiedDrag"
+#define kMFButtonTriggerDurationModifiedScroll                          @"modifiedScroll"
 ///     ^ Using "duration" doesn't make sense anymore after introducing durationModifying.
 ///         TODO: Use "type" instead of "duration". (Also replace kMFButtonTriggerKeyDuration)
 // Type key

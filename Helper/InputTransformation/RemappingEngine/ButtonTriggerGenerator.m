@@ -19,11 +19,13 @@
 #import "SharedUtility.h"
 #import "ButtonTriggerHandler.h"
 #import "ButtonLandscapeAssessor.h"
+#import <ReactiveObjC.h>
 
 #pragma mark - Definition of private helper class `Button State`
 
 // Instaces of this helper class describe the state of a single button on an input device
 // The `_state` class variable of `ButtonInputParser` (renamed to ButtonTriggerGenerator) is a collection of `ButtonState` instances
+
 @interface ButtonState : NSObject
 - (instancetype)init NS_UNAVAILABLE;
 @property NSTimer *holdTimer;
@@ -34,6 +36,7 @@
 @property (readonly) CFTimeInterval pressedAtTimeStamp; // Keep track of when a button's been pressed to obtain press order in `getActiveButtonModifiersForDevice`
 @property (readonly) Device *device;
 @end
+
 @implementation ButtonState
 @synthesize clickLevel = _clickLevel, isPressed = _isPressed, pressedAtTimeStamp = _pressedAtTimeStamp;
 #pragma mark Init
@@ -318,6 +321,28 @@ static void neuterAllButtonsOnDeviceExcept(NSNumber *devID, NSNumber *exceptedBt
     }
     return outArray;
 }
+
++ (void)onReleaseOfButton:(NSNumber *)button onDevice:(NSNumber *)deviceID executeBlock:(void (^)(void))block {
+    
+    ButtonState *bs = _state[deviceID][button];
+
+    assert(bs.isPressed);
+    
+    __block RACDisposable *handle = [[bs rac_valuesForKeyPath:@keypath(bs, isPressed) observer:(id)self] subscribeNext:^(id  _Nullable x) {
+        /// ^ We can't use RACObserve because it expects self to be an NSObject. Since ths is a class method, self is not an NSObject, but it should still work the same as an NSObject for Key-Value-Observation (which is what RACObserver is built upon).
+        ///     `rac_valuesForKeyPath:` does the same thing as RACObserve (I think) but it allows us to cast self to id before passing it, avoiding the errors.
+        
+        BOOL isPressed = ((NSNumber *)x).boolValue;
+        
+        assert(!isPressed);
+        
+        block();
+        
+        [handle dispose]; /// Stop observing this button.
+    }];
+}
+
+
 
 #pragma mark - Helper
 

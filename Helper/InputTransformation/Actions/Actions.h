@@ -14,7 +14,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface Actions : NSObject
 
-+ (void)executeActionArray:(NSArray *)actionArray;
++ (void)executeActionDict:(NSDictionary *)actionDict;
++ (void (^)(void))initModifyingActionWithDict:(NSDictionary *)actionDict
+                 hasBeenUsedCallback:(void (^)(void))hasBeenUsedCallback;
 
 @end
 

@@ -19,5 +19,7 @@
 
 + (NSArray *)getActiveButtonModifiersForDevice:(NSNumber *)devID;
 
++ (void)onReleaseOfButton:(NSNumber *)button onDevice:(NSNumber *)deviceID executeBlock:(void (^)(void))block;
+
 @end
 

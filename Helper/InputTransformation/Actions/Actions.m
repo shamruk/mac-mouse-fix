@@ -16,63 +16,125 @@
 #import "MessagePort_Helper.h"
 #import "TransformationManager.h"
 #import "Utility_Helper.h"
+#import "ModifiedDrag.h"
 
 @implementation Actions
 
-+ (void)executeActionArray:(NSArray *)actionArray {
++ (void)executeActionDict:(NSDictionary *)actionDict {
     
-    DDLogDebug(@"Executing action array: %@", actionArray);
-    
-    for (NSDictionary *actionDict in actionArray) {
+    DDLogDebug(@"Executing action dict: %@", actionDict);
         
-        MFStringConstant actionType = actionDict[kMFActionDictKeyType];
-    
-        if ([actionType isEqualToString:kMFActionDictTypeSymbolicHotkey]) {
-            
-            MFSymbolicHotkey shk = ((NSNumber *)actionDict[kMFActionDictKeyGenericVariant]).intValue;
-            postSymbolicHotkey((CGSSymbolicHotKey) shk);
-            
-        } else if ([actionType isEqualToString:kMFActionDictTypeNavigationSwipe]) {
-            
-            NSString *dirString = actionDict[kMFActionDictKeyGenericVariant];
-            
-            if ([dirString isEqualToString:kMFNavigationSwipeVariantLeft]) {
-                [TouchSimulator postNavigationSwipeEventWithDirection:kIOHIDSwipeLeft];
-            } else if ([dirString isEqualToString:kMFNavigationSwipeVariantRight]) {
-                [TouchSimulator postNavigationSwipeEventWithDirection:kIOHIDSwipeRight];
-            } else if ([dirString isEqualToString:kMFNavigationSwipeVariantUp]) {
-                [TouchSimulator postNavigationSwipeEventWithDirection:kIOHIDSwipeUp];
-            } else if ([dirString isEqualToString:kMFNavigationSwipeVariantDown]) {
-                [TouchSimulator postNavigationSwipeEventWithDirection:kIOHIDSwipeDown];
-            }
-            
-        } else if ([actionType isEqualToString:kMFActionDictTypeSmartZoom]) {
-            
-            [TouchSimulator postSmartZoomEvent];
-            
-        } else if ([actionType isEqualToString:kMFActionDictTypeKeyboardShortcut]) {
-            
-            NSNumber *keycode = actionDict[kMFActionDictKeyKeyboardShortcutVariantKeycode];
-            NSNumber *flags = actionDict[kMFActionDictKeyKeyboardShortcutVariantModifierFlags];
-            postKeyboardShortcut(keycode.intValue, flags.intValue);
-            
-        } else if ([actionType isEqualToString:kMFActionDictTypeMouseButtonClicks]) {
-            
-            NSNumber *button = actionDict[kMFActionDictKeyMouseButtonClicksVariantButtonNumber];
-            NSNumber *nOfClicks = actionDict[kMFActionDictKeyMouseButtonClicksVariantNumberOfClicks];
-            [Utility_Transformation postMouseButtonClicks:button.intValue nOfClicks:nOfClicks.intValue];
+    MFStringConstant actionType = actionDict[kMFActionDictKeyType];
+
+    if ([actionType isEqualToString:kMFActionDictTypeSymbolicHotkey]) {
         
-        } else if ([actionType isEqualToString:kMFActionDictTypeAddModeFeedback]) {
-            NSMutableDictionary *payload = ((NSMutableDictionary *)actionDict.mutableCopy);
-            [payload removeObjectForKey:kMFActionDictKeyType];
-            // ^ Payload has the kMFRemapsKeyTrigger and kMFRemapsKeyModificationPrecondition keys.
-            // It is almost a valid remaps table entry.
-            // All that the main app has to do with the payload in order to make it a valid entry of the remap table's
-            //  dataModel is to add the kMFRemapsKeyEffect key and corresponding values
-            [TransformationManager concludeAddModeWithPayload:payload];
-            
+        MFSymbolicHotkey shk = ((NSNumber *)actionDict[kMFActionDictKeyGenericVariant]).intValue;
+        postSymbolicHotkey((CGSSymbolicHotKey) shk);
+        
+    } else if ([actionType isEqualToString:kMFActionDictTypeNavigationSwipe]) {
+        
+        NSString *dirString = actionDict[kMFActionDictKeyGenericVariant];
+        
+        if ([dirString isEqualToString:kMFNavigationSwipeVariantLeft]) {
+            [TouchSimulator postNavigationSwipeEventWithDirection:kIOHIDSwipeLeft];
+        } else if ([dirString isEqualToString:kMFNavigationSwipeVariantRight]) {
+            [TouchSimulator postNavigationSwipeEventWithDirection:kIOHIDSwipeRight];
+        } else if ([dirString isEqualToString:kMFNavigationSwipeVariantUp]) {
+            [TouchSimulator postNavigationSwipeEventWithDirection:kIOHIDSwipeUp];
+        } else if ([dirString isEqualToString:kMFNavigationSwipeVariantDown]) {
+            [TouchSimulator postNavigationSwipeEventWithDirection:kIOHIDSwipeDown];
         }
+        
+    } else if ([actionType isEqualToString:kMFActionDictTypeSmartZoom]) {
+        
+        [TouchSimulator postSmartZoomEvent];
+        
+    } else if ([actionType isEqualToString:kMFActionDictTypeKeyboardShortcut]) {
+        
+        NSNumber *keycode = actionDict[kMFActionDictKeyKeyboardShortcutVariantKeycode];
+        NSNumber *flags = actionDict[kMFActionDictKeyKeyboardShortcutVariantModifierFlags];
+        postKeyboardShortcut(keycode.intValue, flags.intValue);
+        
+    } else if ([actionType isEqualToString:kMFActionDictTypeMouseButtonClicks]) {
+        
+        NSNumber *button = actionDict[kMFActionDictKeyMouseButtonClicksVariantButtonNumber];
+        NSNumber *nOfClicks = actionDict[kMFActionDictKeyMouseButtonClicksVariantNumberOfClicks];
+        [Utility_Transformation postMouseButtonClicks:button.intValue nOfClicks:nOfClicks.intValue];
+    
+    } else if ([actionType isEqualToString:kMFActionDictTypeAddModeFeedback]) {
+        
+        sendAddModeFeedback(actionDict);
+        
     }
+}
+
++ (void (^)(void))initModifyingActionWithDict:(NSDictionary *)actionDict
+                 hasBeenUsedCallback:(void (^)(void))hasBeenUsedCallback {
+    /// Returns a block that can be used to deactivate the modification
+    
+    /// Log
+    DDLogDebug(@"Initializing modifying action with dict: %@", actionDict);
+    
+    /// Declare the deactivation function
+    void (^deactivate)(void);
+    
+    /// Get type
+    MFStringConstant modifyingActionType = actionDict[kMFButtonTriggerKeyDuration];
+    
+    if ([modifyingActionType isEqual:kMFButtonTriggerDurationModifiedDrag]) {
+        /// Is modifiedDrag action
+        
+        NSString *modifiedDragType = actionDict[kMFModifiedDragDictKeyType];
+        
+        if ([modifiedDragType isEqual:kMFModifiedDragTypeThreeFingerSwipe]) {
+            
+            ModifiedDrag initializeDragWithModifiedDragDict:actionDict onDevice:<#(nonnull Device *)#>
+            
+        } else if ([modifiedDragType isEqual:kMFModifiedDragTypeTwoFingerSwipe]) {
+            
+        } else if ([modifiedDragType isEqual:kMFModifiedDragTypeFakeDrag]) {
+            
+
+            
+        } else if ([modifiedDragType isEqual:kMFModifiedDragTypeAddModeFeedback]) {
+            
+            
+        } else assert(false);
+        
+    } else if ([modifyingActionType isEqual:kMFButtonTriggerDurationModifiedScroll]) {
+        /// Is modifiedScroll action
+        
+        NSString *modifiedScrollType = actionDict[kMFModifiedScrollDictKeyType];
+        
+        if ([modifiedScrollType isEqual:kMFModifiedScrollTypeZoom]) {
+            
+        } else if ([modifiedScrollType isEqual:kMFModifiedScrollTypeHorizontalScroll]) {
+            
+        } else if ([modifiedScrollType isEqual:kMFModifiedScrollTypePrecisionScroll]) {
+            
+        } else if ([modifiedScrollType isEqual:kMFModifiedScrollTypeFastScroll]) {
+            
+        } else if ([modifiedScrollType isEqual:kMFModifiedScrollTypeAddModeFeedback]) {
+            
+            
+        } else assert(false);
+        
+    } else assert(false);
+    
+    /// Return deactivation function
+    return deactivate;
+}
+
+/// Helper functions for action dict execution methods (above)
+
+static void sendAddModeFeedback(NSDictionary * _Nonnull actionDict) {
+    NSMutableDictionary *payload = ((NSMutableDictionary *)actionDict.mutableCopy);
+    [payload removeObjectForKey:kMFActionDictKeyType];
+    /// ^ Payload has the kMFRemapsKeyTrigger and kMFRemapsKeyModificationPrecondition keys.
+    /// It is almost a valid remaps table entry.
+    /// All that the main app has to do with the payload in order to make it a valid entry of the remap table's
+    ///  dataModel is to add the kMFRemapsKeyEffect key and corresponding values
+    [TransformationManager concludeAddModeWithPayload:payload];
 }
 
 #pragma mark - Keyboard shortcuts

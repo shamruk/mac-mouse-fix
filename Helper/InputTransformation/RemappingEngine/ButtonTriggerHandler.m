@@ -17,6 +17,7 @@
 #import "ButtonTriggerHandler.h"
 #import "ButtonLandscapeAssessor.h"
 #import "Utility_Transformation.h"
+#import <ReactiveObjC/ReactiveObjC.h>
 
 /// Figures out what effects to execute based on the triggers coming in from ButtonTriggerGenerator.m
 
@@ -41,7 +42,7 @@
     
     /// Debug
     
-//    DDLogDebug(@"\nActive mods: %@, \nremapsForActiveMods: %@", modifiersActingOnThisButton, remapsForModifiersActingOnThisButton);
+    //    DDLogDebug(@"\nActive mods: %@, \nremapsForActiveMods: %@", modifiersActingOnThisButton, remapsForModifiersActingOnThisButton);
     
     /// Let input pass through
     /// If no remaps exist for this button, let the CGEvent which caused this function call pass through
@@ -56,17 +57,21 @@
         }
     }
     
-    /// Execute modifyingActions
+    /// Execute modifyingAction
     
-    if (triggerType == kMFActionTriggerTypeButtonDown) {
-        
-    }
+    if (triggerType == kMFActionTriggerTypeButtonDown) executeActionIfItExists(kMFButtonTriggerDurationModifying,
+                                                                               devID,
+                                                                               button,
+                                                                               level,
+                                                                               modifiersActingOnThisTrigger,
+                                                                               remapsForModifiersActingOnThisTrigger,
+                                                                               remapsActingOnThisTrigger);
     
-    /// Execute oneShotActions
+    /// Execute oneShotAction
     
     if (isTriggerForClickAction(triggerType)) {
-        /// The incoming trigger is for a click action.
-     
+        /// The incoming trigger is for a click action
+        
         /// Get active modifiers
         ///     We need them to assess mapping landscape (below)
         
@@ -75,12 +80,12 @@
         ///         so we can't use the variable `modifiersActingOnThisButton` defined above because it filters out the incoming button
         
         /**
-        Assess the mapping landscape
-            - Analyze which other mappings exist for the incoming button. Based on this info we can then determine which of the 3 click triggers we want to execute the click action on. We call this trigger the `targetTriggerType`.
+         Assess the mapping landscape
+             - Analyze which other mappings exist for the incoming button. Based on this info we can then determine which of the 3 click triggers we want to execute the click action on. We call this trigger the `targetTriggerType`.
                 - The "3 click triggers" (mentioned above) are the triggers produced by ButtonTriggerGenerator on which a click action can be executed. Namely buttonUp, buttonDown, and levelTimerExpired.
-            - It's unnecessary to figure out the targetTriggerType for click actions again and again, on every call of this function. We could precalculated everything, because the targetTriggerType only depends on the other mappings on the incoming button (aka the mappingLandscape).
+             - It's unnecessary to figure out the targetTriggerType for click actions again and again, on every call of this function. We could precalculated everything, because the targetTriggerType only depends on the other mappings on the incoming button (aka the mappingLandscape).
                 - However, when modifiers are active, (parts) of the mappingLandscape can be overridden. This would somewhat complicate the pre-calculation-approach, as we'd have to precalculate for each possible combination of modifications.
-                - Anyways, the current approach (where we calculate the targetTriggerTypes for click actions again and again) is is plenty fast. So it's fine.
+                -   Anyways, the current approach (where we calculate the targetTriggerTypes for click actions again and again) is is plenty fast. So it's fine.
          */
         
         BOOL clickActionOfThisLevelExists;
@@ -109,24 +114,24 @@
         
         /// Execute action if incoming trigger matches target trigger
         
-        if (triggerType == targetTriggerType) executeClickOrHoldActionIfItExists(kMFButtonTriggerDurationClick,
-                                                                                 devID,
-                                                                                 button,
-                                                                                 level,
-                                                                                 modifiersActingOnThisTrigger,
-                                                                                 remapsForModifiersActingOnThisTrigger,
-                                                                                 remapsActingOnThisTrigger);
+        if (triggerType == targetTriggerType) executeActionIfItExists(kMFButtonTriggerDurationClick,
+                                                                      devID,
+                                                                      button,
+                                                                      level,
+                                                                      modifiersActingOnThisTrigger,
+                                                                      remapsForModifiersActingOnThisTrigger,
+                                                                      remapsActingOnThisTrigger);
     } else if (triggerType == kMFActionTriggerTypeHoldTimerExpired) {
         /// Incoming trigger is for hold action
         /// -> Execute the hold action immediately. No need to calculate targetTriggerType like with the click triggers (above)
         
-        executeClickOrHoldActionIfItExists(kMFButtonTriggerDurationHold,
-                                           devID,
-                                           button,
-                                           level,
-                                           modifiersActingOnThisTrigger,
-                                           remapsForModifiersActingOnThisTrigger,
-                                           remapsActingOnThisTrigger);
+        executeActionIfItExists(kMFButtonTriggerDurationHold,
+                                devID,
+                                button,
+                                level,
+                                modifiersActingOnThisTrigger,
+                                remapsForModifiersActingOnThisTrigger,
+                                remapsActingOnThisTrigger);
     } else {
         assert(false);
     }
@@ -136,61 +141,64 @@
     
 }
 
-#pragma mark - Execute oneShotActions
+#pragma mark - Execute actions
 
-static void executeClickOrHoldActionIfItExists(NSString * _Nonnull duration,
+static void executeActionIfItExists(NSString * _Nonnull duration,
                                                NSNumber * _Nonnull devID,
                                                NSNumber * _Nonnull button,
                                                NSNumber * _Nonnull level,
-                                               NSDictionary *activeModifiers,
+                                               NSDictionary *modifiersActingOnThisTrigger,
                                                NSDictionary *remapsForModifiersActingOnThisTrigger,
                                                NSDictionary *remapsActingOnThisTrigger) {
     
-    NSArray *effectiveActionArray = remapsActingOnThisTrigger[button][level][duration];
-    if (effectiveActionArray) { // click/hold action does exist for this button + level
-        // // Add modificationPrecondition info for addMode. See TransformationManager -> AddMode for context
-        if ([effectiveActionArray[0][kMFActionDictKeyType] isEqualToString: kMFActionDictTypeAddModeFeedback]) {
-            effectiveActionArray[0][kMFRemapsKeyModificationPrecondition] = activeModifiers;
-        }
-        // Execute action
-        [Actions executeActionArray:effectiveActionArray];
-        // Notify triggering button
-        [ButtonTriggerGenerator handleButtonHasHadDirectEffectWithDevice:devID button:button];
-        // Notify modifying buttons if executed action depends on active modification
-        NSArray *actionArrayFromActiveModification = remapsForModifiersActingOnThisTrigger[button][level][duration];
-        BOOL actionStemsFromModification = [effectiveActionArray isEqual:actionArrayFromActiveModification];
-        if (actionStemsFromModification) {
-            [ModifierManager handleModifiersHaveHadEffect:devID];
-        }
-    }
-}
-
-#pragma mark - Execute modifyingActions
-
-static void executeModifyingActionIfItExists(NSString * _Nonnull duration,
-                                               NSNumber * _Nonnull devID,
-                                               NSNumber * _Nonnull button,
-                                               NSNumber * _Nonnull level,
-                                               NSDictionary *activeModifiers,
-                                               NSDictionary *remapsForModifiersActingOnThisTrigger,
-                                               NSDictionary *remapsActingOnThisTrigger) {
+    /// Get actionArray
+    NSArray *actionArray = remapsActingOnThisTrigger[button][level][duration];
     
-    NSArray *effectiveActionArray = remapsActingOnThisTrigger[button][level][kMFButtonTriggerDurationModifying];
-    if (effectiveActionArray) { // click/hold action does exist for this button + level
-        // // Add modificationPrecondition info for addMode. See TransformationManager -> AddMode for context
-        if ([effectiveActionArray[0][kMFActionDictKeyType] isEqualToString: kMFActionDictTypeAddModeFeedback]) {
-            effectiveActionArray[0][kMFRemapsKeyModificationPrecondition] = activeModifiers;
-        }
-        // Execute action
-        [Actions executeActionArray:effectiveActionArray];
-        // Notify triggering button
-        [ButtonTriggerGenerator handleButtonHasHadDirectEffectWithDevice:devID button:button];
-        // Notify modifying buttons if executed action depends on active modification
-        NSArray *actionArrayFromActiveModification = remapsForModifiersActingOnThisTrigger[button][level][kMFButtonTriggerDurationModifying];
-        BOOL actionStemsFromModification = [effectiveActionArray isEqual:actionArrayFromActiveModification];
-        if (actionStemsFromModification) {
+    /// Extract actionDict from actionArray
+    assert(actionArray.count == 1); /// `actionArray` is just a wrapper for `actionDict` and has no need to exist, but it works, so we just leave it this way.
+    NSMutableDictionary *actionDict = actionArray.firstObject;
+    
+    if (actionDict) { /// click/hold action does exist for this button + level
+        
+        /// Notify modifying buttons if executed action depends on active modification
+        NSArray *actionDict_ForModifiersActingOnThisTrigger = ((NSArray *)remapsForModifiersActingOnThisTrigger[button][level][duration]).firstObject;
+        BOOL actionStemsFromModifiers = [actionDict isEqual:actionDict_ForModifiersActingOnThisTrigger];
+        if (actionStemsFromModifiers) {
             [ModifierManager handleModifiersHaveHadEffect:devID];
         }
+        
+        /// Add modificationPrecondition info for addMode. See TransformationManager -> AddMode for context
+        if ([actionDict[kMFActionDictKeyType] isEqualToString: kMFActionDictTypeAddModeFeedback]) {
+            actionDict[kMFRemapsKeyModificationPrecondition] = modifiersActingOnThisTrigger;
+        }
+        
+        if ([duration isEqual:kMFButtonTriggerDurationClick] || [duration isEqual:kMFButtonTriggerDurationHold]) {
+            /// This action is a oneShotAction
+        
+            /// Execute action
+            [Actions executeActionDict:actionDict];
+            
+            /// Notify triggering button
+            [ButtonTriggerGenerator handleButtonHasHadDirectEffectWithDevice:devID button:button];
+            
+        } else if ([duration isEqual:kMFButtonTriggerDurationModifiedDrag] || [duration isEqual:kMFButtonTriggerDurationModifiedScroll]) {
+            /// This action is a modifying action
+            
+            /// Init the modifying action
+            
+            void (^deactivate)(void) = [Actions initModifyingActionWithDict:actionDict
+                                                        hasBeenUsedCallback:^void (void) {
+                /// Notify the triggering button when modifyingAction has been used
+                [ButtonTriggerGenerator handleButtonHasHadEffectAsModifierWithDevice:devID button:button];
+            }];
+            
+            /// Deactivate the modifyingAction, when the triggering button is released
+            
+            [ButtonTriggerGenerator onReleaseOfButton:button onDevice:devID executeBlock:^{
+                deactivate();
+            }];
+            
+        } else assert(false);
     }
 }
 
